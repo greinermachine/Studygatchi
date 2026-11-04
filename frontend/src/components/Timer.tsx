@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import "./Timer.css";
+import {
+  hasExtensionStorage,
+  syncProhibitedSites,
+} from "../api/prohibitedSites";
 
 type SessionType = "Work" | "Short Break" | "Long Break";
 
@@ -25,6 +29,7 @@ export default function Timer() {
   const [running, setRunning] = useState<boolean>(false);
   const [completedCycles, setCompletedCycles] = useState<number>(0);
   const [showSettings, setShowSettings] = useState<boolean>(false); // popup toggle
+  const [lockInError, setLockInError] = useState<string>("");
 
   const intervalRef = useRef<number | null>(null);
 
@@ -45,6 +50,20 @@ export default function Timer() {
     else if (session === "Short Break") setSecondsLeft(shortBreakMins * 60);
     else if (session === "Long Break") setSecondsLeft(longBreakMins * 60);
   }, [workMins, shortBreakMins, longBreakMins, session]);
+
+  useEffect(() => {
+    if (hasExtensionStorage()) {
+      chrome.storage.local.set({ lockedIn: running && session === "Work" });
+    }
+  }, [running, session]);
+
+  useEffect(() => {
+    return () => {
+      if (hasExtensionStorage()) {
+        chrome.storage.local.set({ lockedIn: false });
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (running) {
@@ -89,7 +108,25 @@ export default function Timer() {
     longBreakMins,
   ]);
 
-  const toggle = () => setRunning((r) => !r);
+  const toggle = async () => {
+    if (running) {
+      setRunning(false);
+      return;
+    }
+
+    setLockInError("");
+    if (hasExtensionStorage()) {
+      try {
+        await syncProhibitedSites();
+      } catch (error: unknown) {
+        setLockInError(
+          error instanceof Error ? error.message : "Unable to load prohibited sites.",
+        );
+        return;
+      }
+    }
+    setRunning(true);
+  };
   const reset = () => {
     setRunning(false);
     setCompletedCycles(0);
@@ -143,6 +180,7 @@ export default function Timer() {
           ⚙️
         </button>
       </div>
+      {lockInError && <p role="alert">{lockInError}</p>}
 
       {/* --- Popup Settings --- */}
       {showSettings && (

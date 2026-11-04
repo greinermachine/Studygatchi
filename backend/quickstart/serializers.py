@@ -1,11 +1,14 @@
 from datetime import datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.validators import URLValidator
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import StudyUser, Task
+from .models import ProhibitedSite, StudyUser, Task
 
 # TODO Add docstrings to each of these functions to help newcomers understand what they do
 
@@ -49,9 +52,36 @@ class TaskSerializer(serializers.HyperlinkedModelSerializer):
     def validate_reward(self, value: int) -> int:
         if value < 0:
             raise serializers.ValidationError("Reward cannot be negative")
-
-        # Reward moderation will go here, for now we can have basic moderation and set a limit (like $100)
         if value > 100:
             raise serializers.ValidationError("Reward exceeds permitted amount")
-
         return value
+
+
+class ProhibitedSiteSerializer(serializers.ModelSerializer):
+    url = serializers.CharField(allow_blank=True, max_length=253)
+
+    class Meta:
+        model = ProhibitedSite
+        fields = ["id", "url"]
+        read_only_fields = ["id"]
+
+    def validate_url(self, value: str) -> str:
+        raw_value = value.strip()
+        if not raw_value or any(character.isspace() for character in raw_value):
+            raise serializers.ValidationError("Enter a valid website host.")
+
+        candidate = raw_value if "://" in raw_value else f"https://{raw_value}"
+        try:
+            parsed = urlsplit(candidate)
+            URLValidator(schemes=["http", "https"])(candidate)
+            hostname = parsed.hostname
+            if not hostname or parsed.username or parsed.password or parsed.path not in ("", "/"):
+                raise ValueError
+            port = parsed.port
+            if port and port not in (80, 443):
+                raise ValueError
+            normalized_host = hostname.rstrip(".").encode("idna").decode("ascii").lower()
+        except (DjangoValidationError, UnicodeError, ValueError):
+            raise serializers.ValidationError("Enter a valid HTTP or HTTPS website host.") from None
+
+        return normalized_host

@@ -1,5 +1,5 @@
 import "./GooberMenu.css";
-// TODO These are placeholders. 
+// TODO These are placeholders.
 // Eventually we're going to want to lazy-load the assets since there will be a lot of them.
 import GooberBackground from "../assets/backgrounds/placeholder.jpg"
 import GooberImg from "../assets/goobers/goober-panda.png";
@@ -62,7 +62,7 @@ export default function GooberMenu({
 
       <div
         className="card-body"
-        style={{ spanAlign: "center", padding: 0 }}
+        style={{ textAlign: "center", padding: 0 }}
       >
         <div
           style={{
