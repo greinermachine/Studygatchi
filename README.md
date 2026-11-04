@@ -70,6 +70,30 @@ You can also run them in Docker if you prefer:
 docker compose exec backend pytest
 ```
 
+### Prohibited sites and locked-in mode
+
+Authenticated users can add a site host from **Settings → Prohibited sites**. Enter a
+host such as `youtube.com` or an HTTP/HTTPS URL; paths, credentials, whitespace, and
+unsupported ports are rejected. The backend normalizes hosts and prevents duplicates
+for the same user. The list is fetched from `GET /api/prohibited_sites/` and additions
+are sent to `POST /api/prohibited_sites/` with the session CSRF token.
+
+The extension synchronizes the saved hosts to `chrome.storage.local` when the app
+opens and again before a timer starts, so a fresh extension session has the current
+list before blocking begins. Starting a work session sets locked-in mode; while the
+work session is running, the Manifest V3 background service worker installs dynamic
+`declarativeNetRequest` rules that block matching top-level pages. Break sessions,
+pausing, resetting, or navigating away from the timer remove those rules. This
+currently blocks sites but does not reduce Goober health, because Goober health is
+still local placeholder state and has no persisted damage endpoint.
+
+To test the feature, start the backend and frontend as described above, authenticate
+the frontend, add a host in Settings, build/import `frontend/build` as an unpacked
+extension, and start a work session. Visit the host in a new tab; it should be
+blocked until the timer is paused, reset, enters a break, or is left. Backend API
+tests are included in
+`backend/quickstart/tests.py` and can be run with `pytest`.
+
 ### Notes
 
 - If you're having issues connecting to the backend, make sure that the PostgreSQL service is running on your system. You might need to do this manually with `sudo systemctl status postgresql`. Verify that your credentials in `.env` and `settings.py` match the fields in PostgreSQL.

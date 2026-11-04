@@ -1,16 +1,53 @@
 import { useState, useEffect, useContext } from "react";
 import "./SettingsMenu.css";
 import { ThemeContext } from "./ThemeProvider.tsx";
+import {
+  addProhibitedSite,
+  hasExtensionStorage,
+  syncProhibitedSites,
+  type ProhibitedSite,
+} from "../api/prohibitedSites";
 
 export default function SettingsMenu() {
   const context = useContext(ThemeContext);
   if (!context) {
     throw new Error("SettingsMenu must be used within a ThemeProvider");
   }
-  const { theme, setTheme, themes } = context;
+  const { setTheme, themes } = context;
 
   const [firstOption, setFirst] = useState(false);
   const [secondOption, setSecond] = useState(false);
+  const [prohibitedSites, setProhibitedSites] = useState<ProhibitedSite[]>([]);
+  const [newSite, setNewSite] = useState("");
+  const [siteError, setSiteError] = useState("");
+  const [siteLoading, setSiteLoading] = useState(true);
+
+  useEffect(() => {
+    syncProhibitedSites()
+      .then((sites) => {
+        setProhibitedSites(sites);
+      })
+      .catch((error: unknown) => {
+        setSiteError(error instanceof Error ? error.message : "Unable to load prohibited sites.");
+      })
+      .finally(() => setSiteLoading(false));
+  }, []);
+
+  const handleAddSite = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSiteError("");
+    try {
+      const site = await addProhibitedSite(newSite);
+      const sites = [...prohibitedSites, site];
+      setProhibitedSites(sites);
+      setNewSite("");
+      if (hasExtensionStorage()) {
+        await chrome.storage.local.set({ prohibitedSites: sites.map((item) => item.url) });
+      }
+    } catch (error: unknown) {
+      setSiteError(error instanceof Error ? error.message : "Unable to add prohibited site.");
+    }
+  };
 
   return (
     <div className="card bCard" style={{ width: "400px" }}>
@@ -90,6 +127,26 @@ export default function SettingsMenu() {
         <h5 className="card-title" style={{ paddingTop: 10 }}>
           Miscellaneous
         </h5>
+        <form onSubmit={handleAddSite}>
+          <label htmlFor="prohibited-site">Prohibited sites</label>
+          <div className="prohibited-site-form">
+            <input
+              id="prohibited-site"
+              type="text"
+              placeholder="example.com"
+              value={newSite}
+              onChange={(event) => setNewSite(event.target.value)}
+              disabled={siteLoading}
+            />
+            <button type="submit" disabled={siteLoading || !newSite.trim()}>
+              Add
+            </button>
+          </div>
+          {siteError && <p role="alert">{siteError}</p>}
+          <ul>
+            {prohibitedSites.map((site) => <li key={site.id}>{site.url}</li>)}
+          </ul>
+        </form>
       </div>
     </div>
   );

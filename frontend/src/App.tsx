@@ -8,6 +8,8 @@ import GooberMenu from "./components/GooberMenu";
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import { ThemeProvider } from './components/ThemeProvider';
 import "bootstrap/dist/css/bootstrap.min.css";
+import { useEffect } from "react";
+import { syncProhibitedSites } from "./api/prohibitedSites";
 
 function App() {
   // had to add because bootstrap defaults to light mode
@@ -18,6 +20,12 @@ function App() {
   const [level, setLevel] = useState(9);
   const [money, setMoney] = useState(0);
   const [currentHealth, setHealth] = useState(50);
+
+  useEffect(() => {
+    syncProhibitedSites().catch((error: unknown) => {
+      console.error("Unable to synchronize prohibited sites", error);
+    });
+  }, []);
 
   return (
     <ThemeProvider>

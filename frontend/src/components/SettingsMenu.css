@@ -7,4 +7,12 @@
     width: 50px;
     height: 45px;
 }
-
+.prohibited-site-form {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+.prohibited-site-form input {
+    min-width: 0;
+    flex: 1;
+}

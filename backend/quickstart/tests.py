@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.test import APIClient
 
-from .models import StudyUser, Task
+from .models import ProhibitedSite, StudyUser, Task
 
 # TODO Add docstrings to each of these functions to help newcomers understand what they do
 
@@ -40,6 +40,43 @@ def test_task(db: Any, test_user: StudyUser) -> Task:
         due_date="2026-12-31T00:00:00Z",
         user=test_user,
     )
+
+
+@pytest.mark.required
+class TestProhibitedSites:
+    endpoint = "/api/prohibited_sites/"
+
+    def test_create_and_list_sites_are_user_scoped(
+        self, api_client: APIClient, test_user: StudyUser, other_user: StudyUser
+    ) -> None:
+        api_client.force_authenticate(user=test_user)
+        response = api_client.post(self.endpoint, {"url": " HTTPS://Example.COM/ "}, format="json")
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["url"] == "example.com"
+        assert ProhibitedSite.objects.get(user=test_user).url == "example.com"
+
+        api_client.force_authenticate(user=other_user)
+        assert api_client.get(self.endpoint).data == []
+
+    def test_rejects_invalid_hosts(self, api_client: APIClient, test_user: StudyUser) -> None:
+        api_client.force_authenticate(user=test_user)
+        for url in ("", "not a website", "ftp://example.com", "https://", "example.com/path"):
+            response = api_client.post(self.endpoint, {"url": url}, format="json")
+            assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_rejects_duplicate_hosts(self, api_client: APIClient, test_user: StudyUser) -> None:
+        api_client.force_authenticate(user=test_user)
+        assert (
+            api_client.post(self.endpoint, {"url": "example.com"}, format="json").status_code == 201
+        )
+        duplicate = api_client.post(self.endpoint, {"url": "https://EXAMPLE.com/"}, format="json")
+
+        assert duplicate.status_code == status.HTTP_400_BAD_REQUEST
+        assert ProhibitedSite.objects.filter(user=test_user).count() == 1
+
+    def test_requires_authentication(self, api_client: APIClient) -> None:
+        assert api_client.get(self.endpoint).status_code == status.HTTP_403_FORBIDDEN
 
 
 @pytest.mark.required
@@ -233,6 +270,19 @@ class TestTaskCreation:
         response = api_client.post("/api/create_task/", data, format="json")
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_update_task_excessive_reward_rejected(
+        self, api_client: APIClient, test_user: StudyUser, test_task: Task
+    ) -> None:
+        api_client.force_authenticate(user=test_user)
+
+        response = api_client.patch(
+            f"/api/update_task/{test_task.id}/", {"reward": 101}, format="json"
+        )
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        test_task.refresh_from_db()
+        assert test_task.reward == 50
 
     def test_create_task_reward_as_string(
         self, api_client: APIClient, test_user: StudyUser
